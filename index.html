@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Notepad</title>
+
+    <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/7/76/Noto_Emoji_v2.034_1f5d2.svg" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vscode-codicons@0.0.17/dist/codicon.min.css" />
+
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+      }
+
+      button {
+        cursor: pointer;
+        background: #f7f7f7;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 0.3rem;
+        font-size: 0.9rem;
+        color: #333;
+        margin: 4px 0;
+      }
+      button:hover {
+        background: #ffffff;
+      }
+
+      /* Tabs container */
+      #tabsContainer {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid #ccc;
+        background: #f7f7f7;
+      }
+
+      #tabs {
+        color: #333;
+        display: flex;
+        flex: 1;
+      }
+
+      #tabs div {
+        display: flex;
+        align-items: center;
+      }
+
+      #tabs .codicon-close {
+        color: #333;
+      }
+
+      #tabsButtons {
+        display: flex;
+        gap: 8px;
+        padding-right: 8px;
+      }
+
+      #tabsButtons button {
+        color: #333;
+        font-size: 1rem;
+        padding: 0.25rem;
+        background: none;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        gap: 0;
+        transition: color 0.1s ease-in-out, background 0.1s ease-in-out;
+      }
+
+      #tabsButtons button:hover {
+        background: #fefefe;
+      }
+
+      #tabsButtons button:active {
+        color: #0078d4;
+      }
+
+      #tabsButtons button.toggled {
+        color: #0078d4;
+        background: #fff;
+      }
+
+      /* Main content */
+      .main-content {
+        display: flex;
+        flex: 1;
+        flex-direction: row;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Note area */
+      .note-area-container {
+        flex: 3;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+
+      #titleInput {
+        font-size: 1.5rem;
+        padding: 1rem;
+        border: none;
+        border-bottom: 1px solid #ccc;
+        width: 100%;
+        box-sizing: border-box;
+        outline: none;
+        margin-top: 0;
+      }
+
+      #highlightLayer {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        box-sizing: border-box;
+        overflow: auto;
+        z-index: 999;
+      }
+
+      /* Toolbar */
+      #toolbar {
+        color: #333;
+        flex: 0 0 25vw;
+        height: 100%;
+        background: #f7f7f7;
+        border-left: 1px solid #ccc;
+        box-sizing: border-box;
+        padding: 1rem;
+        position: relative;
+        min-width: 340px;
+      }
+
+      #toolbar.collapsed {
+        flex: 0 0 0px !important;
+        width: 0px !important;
+        min-width: 0px !important;
+        padding: 0;
+      }
+
+      #toolbarResizeHandle {
+        position: absolute;
+        left: -2px;
+        top: 0;
+        width: 3px;
+        height: 100%;
+        cursor: ew-resize;
+        z-index: 9999;
+        opacity: 0;
+      }
+
+      .collapsed #toolbarResizeHandle:hover {
+        cursor: default;
+        opacity: 0;
+      }
+
+      #toolbarResizeHandle:hover {
+        opacity: 1;
+        background: #0078d4;
+      }
+
+      .tool-section {
+        margin-bottom: 1.5rem;
+      }
+
+      .tool-header {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .tool-toggle {
+        margin-right: 0.5rem;
+      }
+      .tool-toggle i {
+        font-size: 0.75em;
+      }
+
+      #jsonTreeContainer {
+        display: none;
+        margin-top: 0.5rem;
+        max-height: 500px;
+        overflow: auto;
+        background: #fff;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        padding: 0.5rem;
+      }
+
+      /* Hide toolbar content when collapsed */
+      #toolbar.collapsed #toolbarContent {
+        display: none;
+      }
+
+      /* Footer */
+      .footer {
+        font-size: 0.9rem;
+        color: #333;
+        background: #f7f7f7;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.6rem;
+        width: 100%;
+        box-sizing: border-box;
+        gap: 4px;
+        border-top: 1px solid #ccc;
+      }
+
+      .footer span {
+        flex-basis: 50vw;
+      }
+
+      /* Scrollbar Styles */
+      ::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(121, 121, 121, 0.4);
+        border-radius: 0;
+        background-clip: content-box;
+        border: 1px solid transparent;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(100, 100, 100, 0.7);
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+        border-radius: 0;
+      }
+      ::-webkit-scrollbar-corner {
+        background: transparent;
+      }
+
+      /* Dark mode styles */
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #181a1b;
+          color: #e0e0e0;
+        }
+
+        button {
+          background: #333;
+          border: 1px solid #444;
+          color: #ddd;
+        }
+        button:hover {
+          background: #3f3f3f;
+        }
+
+        #tabsContainer {
+          background: #181a1b !important;
+          border-bottom: 1px solid #333 !important;
+        }
+
+        #tabs > div {
+          background: #181a1b !important;
+          color: #e0e0e0 !important;
+        }
+
+        #tabs > div[style*="background: #fff"] {
+          background: #222 !important;
+          color: #fff !important;
+        }
+
+        #titleInput {
+          background: #232527;
+          color: #e0e0e0;
+          border-bottom: 1px solid #333;
+        }
+
+        #titleInput::placeholder {
+          color: #888;
+        }
+
+        #tabsButtons button,
+        #tabs .codicon-close {
+          color: #ddd;
+        }
+
+        #tabsButtons button:hover {
+          background: #444;
+        }
+
+        #tabsButtons button.toggled {
+          background: #0078d4;
+          color: #fff;
+        }
+
+        #jsonTreeContainer {
+          background: #232527;
+          border-color: #333;
+          color: #e0e0e0;
+        }
+
+        .footer {
+          color: #ddd;
+          background: #181a1b;
+          border-top: 1px solid #333;
+        }
+
+        #toolbar {
+          background: #181a1b;
+          border-left: 1px solid #333;
+        }
+
+        #toolbarContent {
+          color: #ddd;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="tabsContainer">
+      <!-- Tabs will be inserted here -->
+      <div id="tabs"></div>
+      <div id="tabsButtons">
+        <button id="addTabBtn" title="New (Ctrl+N)">
+          <div class="codicon codicon-new-file"></div>
+        </button>
+        <button id="openNoteBtn" title="Open (Ctrl+O)">
+          <div class="codicon codicon-folder"></div>
+        </button>
+        <button id="saveNoteBtn" title="Save (Ctrl+S)">
+          <div class="codicon codicon-save"></div>
+        </button>
+        <button id="toggleWordWrapBtn" class="toggled" title="Word wrap">
+          <div class="codicon codicon-word-wrap"></div>
+        </button>
+        <button id="toggleCompareBtn" title="Compare">
+          <div class="codicon codicon-split-horizontal"></div>
+        </button>
+
+        <button id="toolbarToggle" title="Toolbar">
+          <div class="codicon codicon-layout-sidebar-right-off"></div>
+        </button>
+      </div>
+    </div>
+    <div class="main-content">
+      <div class="note-wrapper" style="display: flex; flex-direction: column; flex: 3">
+        <div class="title-input-container">
+          <input type="text" id="titleInput" placeholder="Enter note title..." />
+        </div>
+        <div class="note-area-container">
+          <div id="noteArea" style="height: calc(100vh - 135px)"></div>
+          <div id="highlightLayer"></div>
+        </div>
+      </div>
+      <div id="toolbar" class="collapsed">
+        <div id="toolbarResizeHandle"></div>
+        <div id="toolbarContent">
+          <!-- JSON Parser Tool -->
+          <div class="tool-section">
+            <div class="tool-header">
+              <span id="jsonParserToggle" class="tool-toggle">
+                <div class="codicon codicon-chevron-down"></div>
+                JSON / YAML Parser
+              </span>
+            </div>
+            <div id="jsonParserContent">
+              <button id="parseJsonBtn">Parse JSON</button>
+              <button id="parseYamlBtn">Parse YAML</button>
+              <button id="beautifyBtn">Beautify</button>
+              <button id="clearJsonBtn">Clear</button>
+              <div id="jsonTreeContainer"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="footer">
+      <span>
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Data may be lost if the browser cache is reset. Do not store anything of value here.
+      </span>
+      <span id="cursorPosition" style="text-align: right"></span>
+    </footer>
+
+    <script>
+      let monacoEditor;
+
+      // Init monaco
+      (function () {
+        require.config({
+          paths: {
+            vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs",
+          },
+        });
+        require(["vs/editor/editor.main"], function () {
+          function updateLanguage() {
+            const text = monacoEditor.getValue();
+            let lang = "plaintext";
+            if (text.trim().startsWith("{") || text.trim().startsWith("[")) {
+              lang = "json";
+            } else if (/^\s*---|^\s*\w+\s*:\s*.+/m.test(text)) {
+              lang = "yaml";
+            }
+            monaco.editor.setModelLanguage(monacoEditor.getModel(), lang);
+          }
+
+          function initSingleMonaco(text = "", language = "plaintext") {
+            const noteAreaDiv = document.getElementById("noteArea");
+            monacoEditor = monaco.editor.create(noteAreaDiv, {
+              value: text,
+              language: language,
+              theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs",
+              wordWrap: "on",
+              automaticLayout: true,
+              scrollBeyondLastLine: false,
+              fontSize: 14,
+            });
+
+            monacoEditor.onDidChangeModelContent(() => {
+              saveNote();
+              updateLanguage();
+            });
+            monacoEditor.onDidChangeCursorPosition(() => {
+              updateCursorPosition();
+            });
+
+            window.monacoEditor = monacoEditor;
+          }
+
+          // Initial load
+          initSingleMonaco();
+          const notes = getNotesObj();
+          const keys = Object.keys(notes);
+          if (keys.length > 0) {
+            selectNote(keys[0]);
+          } else {
+            addNewNote();
+          }
+          updateLanguage();
+          updateCursorPosition();
+
+          window.monacoEditor = monacoEditor;
+          window.initSingleMonaco = initSingleMonaco;
+          window.updateLanguage = updateLanguage;
+        });
+      })();
+
+      // Note functions
+      (function () {
+        const tabs = document.getElementById("tabs");
+        const addTabBtn = document.getElementById("addTabBtn");
+        const titleInput = document.getElementById("titleInput");
+
+        function getNotesObj() {
+          const notes = localStorage.getItem("notes");
+          if (!notes) return {};
+          try {
+            return JSON.parse(notes);
+          } catch (e) {
+            console.error("Invalid JSON in localStorage:", e.message);
+            localStorage.setItem("notes", JSON.stringify({}));
+            return {};
+          }
+        }
+
+        function setNotesObj(obj) {
+          localStorage.setItem("notes", JSON.stringify(obj));
+        }
+
+        function selectNote(key) {
+          titleInput.value = key;
+          loadNote(key);
+          renderTabs(key);
+        }
+
+        function addNewNote() {
+          let base = "New Note";
+          let notes = getNotesObj();
+          let name = base;
+          let i = 1;
+          while (notes[name]) {
+            name = base + " " + i;
+            i++;
+          }
+          notes[name] = "";
+          setNotesObj(notes);
+          selectNote(name);
+        }
+
+        function loadNote(key) {
+          const notes = getNotesObj();
+          if (monacoEditor) monacoEditor.setValue(notes[key] || "");
+        }
+
+        function deleteNote(key) {
+          const notes = getNotesObj();
+          delete notes[key];
+          setNotesObj(notes);
+
+          const keys = Object.keys(notes);
+          if (keys.length > 0) {
+            selectNote(keys[0]);
+          } else {
+            addNewNote();
+          }
+        }
+
+        let saveTimeout;
+        function saveNote() {
+          clearTimeout(saveTimeout);
+          saveTimeout = setTimeout(() => {
+            const notes = getNotesObj();
+            const previousTitle = Object.keys(notes).find((key) => notes[key] === (monacoEditor ? monacoEditor.getValue() : ""));
+            const currentTitle = titleInput.value;
+            const currentContent = monacoEditor ? monacoEditor.getValue() : "";
+
+            if (previousTitle && previousTitle !== currentTitle) {
+              delete notes[previousTitle]; // Remove the old title
+            }
+
+            if (currentTitle) {
+              notes[currentTitle] = currentContent; // Overwrite or save under the new title
+              setNotesObj(notes);
+              renderTabs(currentTitle); // Update the tab name
+            }
+          }, 500); // Save after 500ms of inactivity
+        }
+
+        function renderTabs(selectedKey) {
+          const notes = getNotesObj();
+          tabs.innerHTML = "";
+          Object.keys(notes).forEach((key) => {
+            const tab = document.createElement("div");
+            tab.textContent = key;
+            tab.style.padding = "0.5rem 1rem";
+            tab.style.cursor = "pointer";
+            tab.style.position = "relative";
+            tab.style.background = key === selectedKey ? "#fff" : "#f7f7f7";
+            tab.style.borderBottom = key === selectedKey ? "2px solid #0078d4" : "2px solid transparent";
+            tab.style.marginRight = "0.5rem";
+            tab.addEventListener("click", () => selectNote(key));
+
+            const delBtn = document.createElement("div");
+            delBtn.classList.add("codicon", "codicon-close");
+            delBtn.title = "Delete (Ctrl+W)";
+            delBtn.style.fontSize = "1rem";
+            delBtn.style.marginLeft = "0.5rem";
+            delBtn.style.cursor = "pointer";
+            delBtn.style.fontWeight = "bold";
+            delBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              deleteNote(key);
+            });
+            tab.appendChild(delBtn);
+
+            tabs.appendChild(tab);
+          });
+        }
+
+        addTabBtn.addEventListener("click", addNewNote);
+        titleInput.addEventListener("input", saveNote);
+
+        window.getNotesObj = getNotesObj;
+        window.setNotesObj = setNotesObj;
+        window.selectNote = selectNote;
+        window.addNewNote = addNewNote;
+        window.loadNote = loadNote;
+        window.renderTabs = renderTabs;
+        window.deleteNote = deleteNote;
+        window.saveNote = saveNote;
+      })();
+
+      // Open Note
+      (function () {
+        const openNoteBtn = document.getElementById("openNoteBtn");
+        const titleInput = document.getElementById("titleInput");
+
+        // Create a hidden file input
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = ".txt";
+        fileInput.style.display = "none";
+        document.body.appendChild(fileInput);
+
+        openNoteBtn.addEventListener("click", function () {
+          fileInput.value = ""; // Reset file input
+          fileInput.click();
+        });
+
+        fileInput.addEventListener("change", function (event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            if (monacoEditor) monacoEditor.setValue(e.target.result);
+            // Set title from filename (without extension)
+            const name = file.name.replace(/\.[^.]+$/, "");
+            titleInput.value = name;
+            // Save to localStorage and update tabs
+            saveNote();
+            renderTabs(name);
+          };
+          reader.readAsText(file);
+        });
+      })();
+
+      // Save Note
+      (function () {
+        const saveNoteBtn = document.getElementById("saveNoteBtn");
+
+        function downloadNote() {
+          if (confirm("Save the current note?")) {
+            const titleInput = document.getElementById("titleInput");
+            const noteName = titleInput.value || "Untitled";
+            const noteContent = monacoEditor ? monacoEditor.getValue() : "";
+            const blob = new Blob([noteContent], { type: "text/plain" });
+            const link = document.createElement("a");
+
+            link.href = URL.createObjectURL(blob);
+            link.download = `${noteName}.txt`;
+            link.click();
+
+            URL.revokeObjectURL(link.href); // Clean up the URL object
+          }
+        }
+
+        saveNoteBtn.addEventListener("click", function () {
+          downloadNote();
+        });
+
+        window.downloadNote = downloadNote;
+      })();
+
+      // Toggle Compare
+      (function () {
+        const toggleCompareBtn = document.getElementById("toggleCompareBtn");
+        const noteAreaDiv = document.getElementById("noteArea");
+        let isCompareEnabled = false;
+
+        toggleCompareBtn.addEventListener("click", () => {
+          if (!isCompareEnabled) {
+            // Show diff
+            const currentModel = monacoEditor.getModel();
+            const currentValue = currentModel.getValue();
+            const currentLang = currentModel.getLanguageId();
+
+            monacoEditor.dispose();
+            monacoEditor = monaco.editor.createDiffEditor(noteAreaDiv, {
+              readOnly: false,
+              theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs",
+              wordWrap: "on",
+              automaticLayout: true,
+              scrollBeyondLastLine: false,
+              fontSize: 14,
+            });
+
+            const originalModel = monaco.editor.createModel(currentValue, currentLang);
+            const modifiedModel = monaco.editor.createModel(currentValue, currentLang);
+            monacoEditor.setModel({
+              original: originalModel,
+              modified: modifiedModel,
+            });
+            window.monacoEditor = monacoEditor;
+          } else if (confirm("Right side will be deleted. Continue?")) {
+            // Hide diff
+            const originalModel = monacoEditor.getModel().original;
+            const originalValue = originalModel.getValue();
+            const originalLang = originalModel.getLanguageId();
+
+            monacoEditor.dispose();
+            initSingleMonaco(originalValue, originalLang);
+          } else {
+            return;
+          }
+          isCompareEnabled = !isCompareEnabled;
+          toggleCompareBtn.classList.toggle("toggled", isCompareEnabled);
+        });
+      })();
+
+      // Toggle Word Wrap
+      (function () {
+        const toggleWordWrapBtn = document.getElementById("toggleWordWrapBtn");
+        let isWordWrapEnabled = true;
+        toggleWordWrapBtn.addEventListener("click", () => {
+          isWordWrapEnabled = !isWordWrapEnabled;
+          toggleWordWrapBtn.classList.toggle("toggled", isWordWrapEnabled);
+          if (monacoEditor) {
+            monacoEditor.updateOptions({
+              wordWrap: isWordWrapEnabled ? "on" : "off",
+            });
+          }
+        });
+      })();
+
+      // Toolbar Resize, Collapse/Expand
+      (function () {
+        const toolbar = document.getElementById("toolbar");
+        const toolbarToggle = document.getElementById("toolbarToggle");
+        const resizeHandle = document.getElementById("toolbarResizeHandle");
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        resizeHandle.addEventListener("mousedown", function (e) {
+          if (toolbar.classList.contains("collapsed")) return;
+          isResizing = true;
+          startX = e.clientX;
+          startWidth = toolbar.offsetWidth;
+          document.body.style.cursor = "ew-resize";
+          document.body.style.userSelect = "none";
+        });
+
+        document.addEventListener("mousemove", function (e) {
+          if (!isResizing) return;
+          let dx = startX - e.clientX;
+          let newWidth = startWidth + dx;
+          newWidth = Math.max(340, Math.min(newWidth, window.innerWidth * 0.8));
+          toolbar.style.flex = `0 0 ${newWidth}px`;
+          toolbar.style.maxWidth = `${newWidth}px`;
+
+          const noteAreaDiv = document.getElementById("noteArea");
+          noteAreaDiv.style.width = `calc(100vw - ${newWidth}px)`;
+          window.monacoEditor.layout();
+        });
+
+        document.addEventListener("mouseup", function () {
+          if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+          }
+        });
+
+        // Toolbar expand/collapse
+        toolbarToggle.addEventListener("click", function () {
+          const isCollapsed = toolbar.classList.toggle("collapsed");
+          toolbarToggle.classList.toggle("toggled", !isCollapsed);
+          // resize monaco
+          const noteAreaDiv = document.getElementById("noteArea");
+          noteAreaDiv.style.width = `calc(100vw - ${isCollapsed ? "0px" : toolbar.offsetWidth + "px"})`;
+          window.monacoEditor.layout();
+        });
+      })();
+
+      // Toolbar Tool Collapse/Expand
+      (function () {
+        const toolbar = document.getElementById("toolbar");
+        function setupToolCollapse(toggleId, contentId) {
+          const toggle = document.getElementById(toggleId);
+          const content = document.getElementById(contentId);
+          let collapsed = false;
+          toggle.addEventListener("click", function () {
+            collapsed = !collapsed;
+            content.style.display = collapsed ? "none" : "block";
+            toggle.innerHTML = toggle.innerHTML.replace(
+              /<div[^>]*><\/div>/g,
+              collapsed ? '<div class="codicon codicon-chevron-right"></div>' : '<div class="codicon codicon-chevron-down"></div>'
+            );
+          });
+        }
+
+        window.setupToolCollapse = setupToolCollapse;
+      })();
+
+      // Parse JSON & YAML Tool
+      (function () {
+        const parseJsonBtn = document.getElementById("parseJsonBtn");
+        const parseYamlBtn = document.getElementById("parseYamlBtn");
+        const beautifyBtn = document.getElementById("beautifyBtn");
+        const clearJsonBtn = document.getElementById("clearJsonBtn");
+        const jsonTreeContainer = document.getElementById("jsonTreeContainer");
+
+        function createCollapsibleTree(data, container) {
+          function createNode(key, value, isRoot = false) {
+            const node = document.createElement("div");
+            node.style.marginLeft = isRoot ? "0" : "20px";
+            node.style.fontFamily = "monospace";
+            if (typeof value === "object" && value !== null) {
+              const toggle = document.createElement("span");
+              toggle.textContent = isRoot ? "[-] " : "[+] ";
+              toggle.style.cursor = "pointer";
+              toggle.addEventListener("click", () => {
+                const isExpanded = toggle.textContent === "[-] ";
+                toggle.textContent = isExpanded ? "[+] " : "[-] ";
+                childContainer.style.display = isExpanded ? "none" : "block";
+              });
+              const keyNode = document.createElement("span");
+              keyNode.textContent = key ? `${key}: ` : "";
+              const childContainer = document.createElement("div");
+              childContainer.style.display = isRoot ? "block" : "none";
+              for (const childKey in value) {
+                childContainer.appendChild(createNode(childKey, value[childKey]));
+              }
+              node.appendChild(toggle);
+              node.appendChild(keyNode);
+              node.appendChild(childContainer);
+            } else {
+              const keyValue = key ? `${key}: ` : "";
+              node.textContent = `${keyValue}${value}`;
+            }
+            return node;
+          }
+          container.innerHTML = "";
+          container.appendChild(createNode(null, data, true));
+        }
+
+        function handleParse(parseFn, errorPrefix) {
+          try {
+            const data = parseFn(monacoEditor ? monacoEditor.getValue() : "");
+            if (typeof data === "undefined") throw new Error(errorPrefix + " is empty or invalid");
+            createCollapsibleTree(data, jsonTreeContainer);
+            jsonTreeContainer.style.color = "inherit";
+          } catch (e) {
+            jsonTreeContainer.textContent = `Invalid ${errorPrefix}: ${e.message}`;
+            jsonTreeContainer.style.color = "red";
+          } finally {
+            jsonTreeContainer.style.display = "block";
+          }
+        }
+
+        function beautifyJsonYaml() {
+          const text = monacoEditor ? monacoEditor.getValue().trim() : "";
+          if (!text) return;
+          let beautified = "";
+          let success = false;
+          // Try JSON first
+          try {
+            const obj = JSON.parse(text);
+            beautified = JSON.stringify(obj, null, 2);
+            success = true;
+          } catch (jsonErr) {}
+          // Try YAML if not JSON
+          if (!success) {
+            try {
+              const obj = window.jsyaml.load(text);
+              beautified = window.jsyaml.dump(obj, {
+                indent: 2,
+                lineWidth: 80,
+              });
+              success = true;
+            } catch (yamlErr) {}
+          }
+          if (success && monacoEditor) {
+            monacoEditor.executeEdits("", [
+              {
+                range: monacoEditor.getModel().getFullModelRange(),
+                text: beautified,
+                forceMoveMarkers: true,
+              },
+            ]);
+            monacoEditor.pushUndoStop();
+          } else {
+            alert("Input is not valid JSON or YAML.");
+          }
+        }
+
+        parseJsonBtn.addEventListener("click", function () {
+          handleParse((text) => JSON.parse(text), "JSON");
+        });
+
+        parseYamlBtn.addEventListener("click", function () {
+          handleParse((text) => window.jsyaml.load(text), "YAML");
+        });
+
+        beautifyBtn.addEventListener("click", function () {
+          beautifyJsonYaml();
+        });
+
+        clearJsonBtn.addEventListener("click", function () {
+          jsonTreeContainer.innerHTML = "";
+          jsonTreeContainer.style.display = "none";
+        });
+      })();
+
+      // Cursor Position
+      (function () {
+        const cursorPosition = document.getElementById("cursorPosition");
+
+        function updateCursorPosition() {
+          if (!monacoEditor) return;
+          const pos = monacoEditor.getPosition();
+          const value = monacoEditor.getValue();
+          cursorPosition.textContent = `Ln ${pos.lineNumber}, Col ${pos.column} | Chs: ${value.length}, Wds: ${value.split(/\s+/).filter(Boolean).length}`;
+        }
+
+        window.updateCursorPosition = updateCursorPosition;
+      })();
+
+      // On Page Load
+      (function () {
+        window.addEventListener("DOMContentLoaded", function () {
+          setupToolCollapse("jsonParserToggle", "jsonParserContent");
+
+          const notes = getNotesObj();
+          const keys = Object.keys(notes);
+          if (keys.length > 0) {
+            selectNote(keys[0]);
+          } else {
+            addNewNote();
+          }
+        });
+
+        // Keyboard Shortcuts
+        document.addEventListener("keydown", function (event) {
+          // Ctrl+S to save current note
+          if ((event.metaKey || event.ctrlKey) && event.key === "s") {
+            event.preventDefault();
+            downloadNote();
+          }
+          // Ctrl+W to delete current note
+          if (event.ctrlKey && event.key === "w") {
+            event.preventDefault();
+            const titleInput = document.getElementById("titleInput");
+            if (titleInput.value && confirm("Delete this note? This cannot be undone")) {
+              deleteNote(titleInput.value);
+            }
+          }
+          // Ctrl+N to create a new note
+          if (event.ctrlKey && event.key === "n") {
+            event.preventDefault();
+            addNewNote();
+          }
+          // Ctrl+O to open a note
+          if ((event.metaKey || event.ctrlKey) && event.key === "o") {
+            event.preventDefault();
+            const fileInput = document.querySelector('input[type="file"][accept=".txt"]');
+            if (fileInput) {
+              fileInput.value = "";
+              fileInput.click();
+            }
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
