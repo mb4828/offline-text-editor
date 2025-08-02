@@ -221,7 +221,9 @@
       }
 
       .footer span {
-        flex-basis: 50vw;
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
 
       /* Scrollbar Styles */
@@ -382,12 +384,25 @@
               <div id="jsonTreeContainer"></div>
             </div>
           </div>
+
+          <!-- Find Non-Ascii Character Tool -->
+          <div class="tool-section">
+            <div class="tool-header">
+              <span id="unicodeFinderToggle" class="tool-toggle">
+                <div class="codicon codicon-chevron-down"></div>
+                Find Non-ASCII Characters
+              </span>
+            </div>
+            <div id="unicodeFinderContent">
+              <button id="findUnicodeBtn">Find</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
     <footer class="footer">
       <span>
-        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div class="codicon codicon-warning"></div>
         Data may be lost if the browser cache is reset. Do not store anything of value here.
       </span>
       <span id="cursorPosition" style="text-align: right"></span>
@@ -880,6 +895,25 @@
         clearJsonBtn.addEventListener("click", function () {
           jsonTreeContainer.innerHTML = "";
           jsonTreeContainer.style.display = "none";
+        });
+      })();
+
+      // Find Non-ASCII Characters Tool
+      (function () {
+        const findUnicodeBtn = document.getElementById("findUnicodeBtn");
+        findUnicodeBtn.addEventListener("click", function () {
+          // set monaco search to regex mode and search for [^\x00-\x7F]
+          if (!monacoEditor) return;
+          const searchString = "[^\\x00-\\x7F]";
+          monacoEditor
+            .getAction("actions.find")
+            .run()
+            .then(() => {
+              const findController = monacoEditor.getContribution("editor.contrib.findController");
+              findController.setSearchString(searchString);
+              findController.getState().change({ isRegex: true, wholeWord: false, matchCase: false }, false);
+              findController.focusFindWidget();
+            });
         });
       })();
 
